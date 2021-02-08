@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Questionable Message</title>
+  <style type="text/css">
+    div, textarea, p {
+      margin: 1em;
+    }
+    label {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <script type="text/javascript">
+    // Put your questions here
+    const questions = [
+      "House number of best friend",
+      "My favorite pokemon",
+    ];
+
+    // Put your ciphertext here
+    const ciphertext = "PKjpRG0NmvTv+POU/RoNHjWcM7UEs7R4Oc1zIIRUvVM=";
+
+    // Encryption algorithm, AES-GCM, AES-CBC, or AES-CTR (todo)
+    const algorithm = "AES-CBC";
+
+    function encode64(string) {
+      return btoa(String.fromCharCode.apply(null, string));
+    }
+
+    function decode64(array) {
+      return Uint8Array.from(atob(array), c => c.charCodeAt(0));
+    }
+
+    function encodeText(string) {
+      return new TextEncoder().encode(string);
+    }
+
+    function decodeText(array) {
+      return new TextDecoder().decode(array);
+    }
+
+    async function sha256(array) {
+      return crypto.subtle.digest("SHA-256", array);
+    }
+
+    async function importKey(array) {
+      return window.crypto.subtle
+        .importKey("raw", array, algorithm, false, ["encrypt", "decrypt"]);
+    }
+
+    async function decrypt(iv, key, text) {
+      try {
+        return await window.crypto.subtle
+          .decrypt({name: algorithm, iv: iv}, key, text);
+      } catch (error) {
+        return new Uint8Array();
+      }
+    }
+
+    async function encrypt(iv, key, text) {
+      return window.crypto.subtle
+        .encrypt({name: algorithm, iv: iv}, key, text);
+    }
+
+    function generateIv() {
+      const array = new Uint8Array(16);
+      window.crypto.getRandomValues(array);
+      return array;
+    }
+
+    const textarea = document.createElement("textarea");
+    const output = document.createElement("p");
+
+    const ciphertextArray = decode64(ciphertext);
+    const ivArray = ciphertextArray.subarray(0, 16);
+    const cipherArray = ciphertextArray.subarray(16);
+
+    async function handleInput() {
+      const answers = questions.map((_, index) => {
+        return document.getElementById("" + index).value;
+      });
+      const keyArray = encodeText(answers.join("\n"));
+      const keyHash = await sha256(keyArray);
+      const key = await importKey(keyHash);
+      if (ciphertext) {
+        const decrypted = await decrypt(ivArray, key, cipherArray);
+        textarea.value = decodeText(decrypted);
+        output.innerHTML = "";
+      } else if (!answers.join("") || !textarea.value) {
+        output.innerHTML = "";
+      } else {
+        const plainArray = encodeText(textarea.value);
+        const iv = generateIv();
+        const encrypted = await encrypt(iv, key, plainArray);
+        const encryptedArray = new Uint8Array(encrypted);
+        const concat = new Uint8Array([...iv, ...encryptedArray]);
+        output.innerHTML = encode64(concat);
+      }
+    }
+
+    const body = document.body;
+
+    function addQuestion(question, index) {
+      const div = document.createElement("div");
+      const text = document.createTextNode(question);
+      const label = document.createElement("label");
+      label.appendChild(text);
+      div.appendChild(label);
+      const input = document.createElement("input");
+      input.id = "" + index;
+      input.onkeyup = handleInput;
+      if (ciphertext) {
+        input.type = "password";
+      } else {
+        input.autocomplete = "off";
+      }
+      div.appendChild(input);
+      body.appendChild(div);
+    }
+
+    questions.forEach(addQuestion);
+    textarea.cols = 80;
+    textarea.rows = 30;
+    textarea.autocomplete = "off";
+    if (ciphertext) {
+      textarea.readOnly = true;
+    } else {
+      textarea.onkeyup = handleInput;
+    }
+    body.appendChild(textarea);
+    body.appendChild(output);
+
+    handleInput();
+  </script>
+</body>
+</html>
